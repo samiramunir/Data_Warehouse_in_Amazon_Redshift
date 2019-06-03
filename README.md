@@ -41,12 +41,19 @@ The data in each log file looks like the following:
 ### The Star Schema
 ![star_schema](schema.png)
 
+
+### Requirements:
+Must have AWS access key and secret id.
+Create an Iam role with AmazonS3ReadOnlyAccess access.
+Create a 4 node cluster on redshift and the above role attached. 
+
+
 ### The ETL pipeline:
 
 
 > RUN FIRST: create_tables.py : Script to create fresh database and tables.
 
-> RUN SECOND: etl.py: Script to parse the log files and and extract data and populate the database with data. 
+> RUN SECOND: etl.py: Script to parse the log files and and extract data and populate the database with data.
 
 > dwh.cfg: Script that holds access keys and information to connect to Redshift and S3
 
