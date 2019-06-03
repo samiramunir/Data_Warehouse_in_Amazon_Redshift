@@ -198,7 +198,7 @@ time_table_insert = ("""INSERT INTO time
                                                 EXTRACT(month from ts)      AS month,
                                                 EXTRACT(month from ts)      AS year,
                                                 EXTRACT(weekday from ts)    AS weekday
-                                         FROM stating_events);
+                                         FROM staging_events);
 """)
 
 # QUERY LISTS
