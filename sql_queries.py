@@ -22,45 +22,30 @@ time_table_drop = "DROP TABLE IF EXISTS time;"
 
 staging_events_table_create= ("""
     CREATE TABLE IF NOT EXISTS staging_events
-       (artist_id       VARCHAR(MAX) DISTKEY SORTKEY,
-        auth            VARCHAR(MAX),
-        first_name      VARCHAR(MAX),
-        gender          VARCHAR(MAX),
+       (artist_id       VARCHAR,
+        auth            VARCHAR,
+        first_name      VARCHAR,
+        gender          VARCHAR,
         item_in_session    INT,
-        last_name       VARCHAR(MAX),
+        last_name       VARCHAR,
         length          numeric,
-        level           VARCHAR(MAX),
-        location        VARCHAR(MAX),
-        method          VARCHAR(MAX),
-        page            VARCHAR(MAX),
-        registration    VARCHAR(MAX),
+        level           VARCHAR,
+        location        VARCHAR,
+        method          VARCHAR,
+        page            VARCHAR,
+        registration    VARCHAR,
         session_id      INT,
-        song            VARCHAR(MAX),
+        song            VARCHAR,
         status          INT,
         ts              TIMESTAMP,
         user_agent      TEXT,
-        user_id         VARCHAR(MAX))
-    DISTSTYLE KEY;
+        user_id         INT);
 
 """)
 
-#     SELECT (SELECT DISTINCT(concat(a.user_id, cast(a.ts as VARCHAR(MAX))) as songplay_id,
-#             a.ts,
-#             a.user_id,
-#             a.level,
-#             b.song_id,
-#             a.artist_id,
-#             a.session_id,
-#             a.location,
-#             a.user_agent)
-#     FROM staging_events a
-#     JOIN staging_songs b ON a.artist_id = b.artist_id
-#     WHERE page == 'NextSong';)
-# """)
-
 staging_songs_table_create = ("""
     CREATE TABLE IF NOT EXISTS staging_songs (
-        artist_id           VARCHAR(MAX) DISTKEY SORTKEY,
+        artist_id           VARCHAR(MAX),
         artist_latitude     NUMERIC,
         artist_location     VARCHAR(MAX),
         artist_longitude    NUMERIC,
@@ -69,38 +54,40 @@ staging_songs_table_create = ("""
         num_songs           INT,
         song_id             VARCHAR(MAX),
         title               VARCHAR(MAX),
-        year                INT)
-     DISTSTYLE KEY;
+        year                INT);
 """)
+
+
+
 
 songplay_table_create = ("""
     CREATE TABLE songplays (
-        songplay_id     INTEGER PRIMARY KEY SORTKEY,
+        songplay_id     VARCHAR PRIMARY KEY SORTKEY NOT NULL,
         start_time      TIMESTAMP NOT NULL,
-        user_id         INT NOT NULL DISTKEY,
-        level           TEXT,
-        song_id         VARCHAR(MAX),
-        artist_id       VARCHAR(MAX),
-        session_id      INT,
-        location        TEXT,
+        user_id         INT DISTKEY,
+        level           VARCHAR NOT NULL,
+        song_id         VARCHAR(MAX) NOT NULL,
+        artist_id       VARCHAR(MAX) NOT NULL,
+        session_id      INT NOT NULL,
+        location        VARCHAR,
         user_agent      TEXT)
     DISTSTYLE KEY;
 """)
 
 user_table_create = ("""
     CREATE TABLE users (
-        user_id         INTEGER PRIMARY KEY SORTKEY DISTKEY,
-        first_name      TEXT,
-        last_name       TEXT,
-        gender          TEXT,
-        level           TEXT)
-    DISTSTYLE KEY;;
+        user_id         INT PRIMARY KEY SORTKEY DISTKEY,
+        first_name      VARCHAR,
+        last_name       VARCHAR,
+        gender          VARCHAR,
+        level           VARCHAR NOT NULL)
+    DISTSTYLE KEY;
 """)
 
 song_table_create = ("""
     CREATE TABLE songs (
-        song_id         INTEGER PRIMARY KEY SORTKEY,
-        title           TEXT,
+        song_id         VARCHAR(MAX) PRIMARY KEY SORTKEY,
+        title           VARCHAR(MAX),
         artist_id       VARCHAR(MAX) NOT NULL DISTKEY,
         year            INT,
         duration        NUMERIC)
@@ -109,8 +96,8 @@ song_table_create = ("""
 
 artist_table_create = ("""
     CREATE TABLE artists (
-        artist_id       INTEGER PRIMARY KEY SORTKEY,
-        name            TEXT,
+        artist_id       VARCHAR(MAX) NOT NULL PRIMARY KEY SORTKEY,
+        name            VARCHAR(MAX) NOT NULL,
         location        VARCHAR(MAX),
         lattitude       NUMERIC,
         longitude       NUMERIC)
@@ -119,7 +106,7 @@ artist_table_create = ("""
 
 time_table_create = ("""
     CREATE TABLE time (
-        start_time      TIMESTAMP PRIMARY KEY SORTKEY DISTKEY,
+        start_time      TIMESTAMP NOT NULL PRIMARY KEY SORTKEY DISTKEY,
         hour            INT,
         day             INT,
         week            INT,
@@ -130,61 +117,88 @@ time_table_create = ("""
 """)
 
 # STAGING TABLES
-table = 'staging_events'
+
 staging_events_copy = """
-                    copy {} from '{}'
+                    copy staging_events
+                    from '{}'
                     credentials 'aws_iam_role={}'
-                    region 'us-west-2' JSON '{}'
+                    region 'us-west-2'
+                    JSON '{}'
                     timeformat 'epochmillisecs';
-        """.format(table, log_data, ARN, log_json_path)
-table = 'staging_songs'
+        """.format(log_data, ARN, log_json_path)
+
 staging_songs_copy = """
-                    copy {} from '{}'
+                    copy staging_songs
+                    from '{}'
                     credentials 'aws_iam_role={}'
-                    region 'us-west-2' JSON '{}'
-                    timeformat 'epochmillisecs';
-        """.format(table, log_data, ARN, log_json_path)
+                    region 'us-west-2'
+                    JSON 'auto';
+        """.format(song_data, ARN)
 
 # FINAL TABLES
 
-songplay_table_insert = ("""INSERT INTO songplays (songplay_id, start_time,
-                                                    user_id, level, song_id,
-                                                    artist_id, session_id,
-                                                    location, user_agent)
-                                            values (%s, %s, %s, %s, %s,
-                                                    %s, %s, %s, %s)
-                                                    ON CONFLICT (songplay_id)
-                                                    DO NOTHING;
+songplay_table_insert = ("""INSERT INTO songplays
+
+                                SELECT * FROM
+
+    (SELECT     DISTINCT(concat(a.song, cast(a.ts AS VARCHAR))) AS songplay_id,
+                a.ts 			                                AS start_time,
+                a.user_id                                       AS user_id,
+                a.level                                         AS levl,
+                b.song_id                                       AS song_id,
+                b.artist_id                                     AS artist_id,
+                a.session_id                                    AS session_id,
+                a.location		                                AS location,
+                a.user_agent                                    AS user_agent
+
+    FROM staging_events a
+    JOIN staging_songs  b
+    ON a.artist_id = b.artist_name
+    WHERE a.page = 'NextSong');
 """)
 
 
-user_table_insert = ("""INSERT INTO users (user_id, first_name, last_name,
-                                            gender, level)
-                                            values (%s, %s, %s, %s, %s)
-                                            ON CONFLICT (user_id)
-                                            DO UPDATE
-                                            SET level=EXCLUDED.level;
+user_table_insert = ("""INSERT INTO users
+                        SELECT  s3.user_id, s3.first_name, s3.last_name, s3.gender, s3.level
+                        FROM (SELECT s1.user_id, s1.first_name, s1.last_name, s1.gender, s1.level, s1.ts
+                                FROM staging_events s1
+                                JOIN (SELECT user_id, MAX(ts) AS ts
+                                      FROM staging_events
+                                      GROUP BY user_id) AS s2
+                                ON   s1.user_id = s2.user_id
+                                AND  s1.ts = s2.ts) AS s3 ;
 """)
 
-song_table_insert = (""" INSERT INTO songs (song_id, title, artist_id,
-                                            year, duration)
-                                            values (%s, %s, %s, %s, %s)
-                                            ON CONFLICT (song_id)
-                                            DO NOTHING;
+song_table_insert = (""" INSERT INTO songs
+                            SELECT * FROM
+                                        (SELECT DISTINCT(song_id),
+                                                         title,
+                                                         artist_id,
+                                                         year,
+                                                         duration
+                                         FROM staging_songs);
 """)
 
-artist_table_insert = ("""INSERT INTO artists (artist_id, name, location,
-                                                latitude, longitude)
-                                                values (%s, %s, %s, %s, %s)
-                                                ON CONFLICT (artist_id)
-                                                DO NOTHING;
+artist_table_insert = (""" INSERT INTO artists
+                            SELECT * FROM
+                                        (SELECT DISTINCT(artist_id)     AS artist_id,
+                                                artist_name             AS name,
+                                                artist_location         AS location,
+                                                artist_latitude         AS latitude,
+                                                artist_longitude        AS longitude
+                                         FROM staging_songs);
 """)
 
-time_table_insert = ("""INSERT INTO time (start_time, hour, day,
-                                            week, month, year, weekday)
-                                            values (%s, %s, %s, %s, %s, %s, %s)
-                                            ON CONFLICT (start_time)
-                                            DO NOTHING;
+time_table_insert = ("""INSERT INTO time
+                            SELECT * FROM
+                                        (SELECT DISTINCT(ts)                AS start_time,
+                                                EXTRACT(hour from ts)       AS hour,
+                                                EXTRACT(day from ts)        AS day,
+                                                EXTRACT(week from ts)       AS week,
+                                                EXTRACT(month from ts)      AS month,
+                                                EXTRACT(month from ts)      AS year,
+                                                EXTRACT(weekday from ts)    AS weekday
+                                         FROM stating_events);
 """)
 
 # QUERY LISTS
