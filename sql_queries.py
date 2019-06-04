@@ -76,7 +76,7 @@ songplay_table_create = ("""
 
 user_table_create = ("""
     CREATE TABLE users (
-        user_id         INT PRIMARY KEY SORTKEY DISTKEY,
+        user_id         INT PRIMARY KEY NOT NULL SORTKEY DISTKEY,
         first_name      VARCHAR,
         last_name       VARCHAR,
         gender          VARCHAR,
@@ -86,7 +86,7 @@ user_table_create = ("""
 
 song_table_create = ("""
     CREATE TABLE songs (
-        song_id         VARCHAR(MAX) PRIMARY KEY SORTKEY,
+        song_id         VARCHAR(MAX) NOT NULL PRIMARY KEY SORTKEY,
         title           VARCHAR(MAX),
         artist_id       VARCHAR(MAX) NOT NULL DISTKEY,
         year            INT,
@@ -166,22 +166,26 @@ user_table_insert = ("""INSERT INTO users
                                       FROM staging_events
                                       GROUP BY user_id) AS s2
                                 ON   s1.user_id = s2.user_id
-                                AND  s1.ts = s2.ts) AS s3 ;
+                                AND  s1.ts = s2.ts) AS s3
+                        WHERE s3.levl = 'NextSong'
+                        AND   s3.user_id is NOT NULL;
 """)
 
 song_table_insert = (""" INSERT INTO songs
                             SELECT * FROM
-                                        (SELECT DISTINCT(song_id),
+                                        (SELECT DISTINCT song_id,
                                                          title,
                                                          artist_id,
                                                          year,
                                                          duration
-                                         FROM staging_songs);
+                                         FROM staging_songs)
+                         WHERE song_id is NOT NULL;
 """)
 
 artist_table_insert = (""" INSERT INTO artists
                             SELECT * FROM
-                                        (SELECT DISTINCT(artist_id)     AS artist_id,
+                                        (SELECT DISTINCT
+                                                artist_id               AS artist_id,
                                                 artist_name             AS name,
                                                 artist_location         AS location,
                                                 artist_latitude         AS latitude,
@@ -191,7 +195,8 @@ artist_table_insert = (""" INSERT INTO artists
 
 time_table_insert = ("""INSERT INTO time
                             SELECT * FROM
-                                        (SELECT DISTINCT(ts)                AS start_time,
+                                        (SELECT DISTINCT
+                                                ts                          AS start_time,
                                                 EXTRACT(hour from ts)       AS hour,
                                                 EXTRACT(day from ts)        AS day,
                                                 EXTRACT(week from ts)       AS week,
